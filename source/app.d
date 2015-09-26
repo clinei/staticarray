@@ -31,7 +31,7 @@ template CommonElementType(T...) if (allSatisfy!(hasLength, T))
 {
     static if (T.length == 1)
     {
-        alias CommonElementType = T[0];
+        alias CommonElementType = ElementType!(T[0]);
     }
     else static if (T.length >= 2)
     {
@@ -134,94 +134,81 @@ static string[] demux(size_t begin = 0, size_t end = 1, string before = "", stri
     return elems;
 }
 
-string atorMix(string target = "arrays", Arrays...)() pure @property
+static string atorMix(string target = "arrays", Arrays...)() pure @property
 {
     import std.array : join;
     return demux(0, Arrays.length, target, "[]").join(", ");
 }
 
-string copyMix(size_t begin = 0, size_t end = 1, string target = "ans")() pure
+static string[] loopMix(size_t begin = 0, size_t end = 1, string form)()
 {
-    import std.array : join;
-    import std.format : format;
-    immutable string str = "[%s]".format(demux(begin, end, target).join(", "));
-    return str;
+    string[] lines;
+    foreach (i; begin..end)
+    {
+        import std.array : replace;
+        import std.conv : to;
+        lines ~= form.replace("@", i.to!string);
+    }
+    return lines;
 }
 
-auto dive(alias fun, bool convert = true, Arrays...)(Arrays arrays) pure nothrow @nogc
+auto dive(alias fun, Arrays...)(Arrays arrays) pure nothrow @nogc
 {
     import std.algorithm : reduce, map;
     import std.range : zip;
     auto ans = mixin("zip(" ~ atorMix!("arrays", Arrays) ~ ")").map!(reduce!fun);
-    static if (convert)
-    {
-        alias ResType = CommonElementType!Arrays[Shortest!Arrays.length];
-        //return arrayCT!ResType(ans);
-        /*
-        import std.format : format;
-        mixin("ResType res = %s; return res;".format(copyMix!(0, ResType.length, "ans")));
-        */
-        /*
-        import std.algorithm : copy;
-        return assumeNoGC(&copy)(ans, res[]);
-        */
-        
-        return assumeNoGC((typeof(ans) a)
-        {
-            /*
-            // Mixin instead of this
-            import std.format : format;
-            mixin("ResType res = %s; return res;".format(copyMix!(0, ResType.length, "ans")));
-            //return res;
-            //ResType res = mixin(copyMix!(0, ResType.length, "ans"));
-            */
-            //return arrayCT!ResType(ans);
-            
-            //ResType res = [ans[0], ans[1]];
-            
-            import std.array : array;
-            ResType res = a.array;
-            return res;
-            /*
-            ResType res;
-            import std.algorithm : copy;
-            copy(a, res[]);
-            return res;
-            */
-            
-            
-        })(ans);
-    }
-    else
-    {
-        return ans;
-    }
+    
+    alias ResType = CommonElementType!Arrays[Shortest!Arrays.length];
+    
+    return ans;
 }
 pure nothrow @nogc
 {
-
-    auto minByElem(bool convert = true, Arrays...)(Arrays arrays)
+    auto minByElem(Arrays...)(Arrays arrays)
         if (allSatisfy!(isStaticArray, Arrays) && hasCommonElementType!Arrays)
     {
         import std.algorithm : min;
-        return arrays.dive!(min, convert);
+        return arrays.dive!(min);
     }
 
-    auto maxByElem(bool convert = true, Arrays...)(Arrays arrays)
+    auto maxByElem(Arrays...)(Arrays arrays)
         if (allSatisfy!(isStaticArray, Arrays) && hasCommonElementType!Arrays)
     {
         import std.algorithm : max;
-        return arrays.dive!(max, convert);
+        return arrays.dive!(max);
     }
-}
-
-import std.traits : isFunctionPointer, isDelegate;
-// Lie about `pure nothrow @nogc`
-private auto assumeNoGC(T) (T t) pure nothrow @nogc if (isFunctionPointer!T || isDelegate!T)
-{
-    import std.traits : functionAttributes, FunctionAttribute, SetFunctionAttributes, functionLinkage;
-    enum attrs = functionAttributes!T | FunctionAttribute.pure_ | FunctionAttribute.nothrow_ | FunctionAttribute.nogc;
-    return cast(SetFunctionAttributes!(T, functionLinkage!T, attrs)) t;
+    
+    auto dot(Arrays...)(Arrays arrays) if (allSatisfy!(isStaticArray, Arrays))
+    {
+        import std.algorithm : reduce;
+        import std.range : zip;
+        import std.conv : to;
+        import std.array : join;
+        
+        alias ElemType = Unqual!(CommonElementType!Arrays);
+        ElemType res = 0;
+        import std.format : format;
+        // CTFE `zip`
+        mixin(loopMix!(0, Shortest!Arrays.length, "res += %s;".format(demux(0, Arrays.length, "arrays", "[@]").join(" * "))).join("\n"));
+        return res;
+    }
+    
+    auto cross(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3 && hasCommonArrayType!(A, B))
+    {
+        CommonArrayType!(A, B) res = [a[1] * b[2] - a[2] * b[1],
+                                      a[2] * b[0] - a[0] * b[2],
+                                      a[0] * b[1] - a[1] * b[0]];
+        return res;
+    }
+    auto reflect(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
+    body
+    {
+        import std.algorithm : map;
+        import std.range : zip;
+        auto d = dot(a, b);
+        auto res = zip(a[], b[]).map!((a2, b2) => a2 - 2 * b2 * d);
+        return res;
+    }
 }
 
 // Canditate for inclusion in `std.traits`
@@ -229,7 +216,7 @@ private
 {
     import std.traits;
     enum bool isImmutable(T) = is(ImmutableOf!T == T);
-    enum bool isConst(T) = is(const(T) == T);
+    enum bool isConst(T) = is(ConstOf!T == T);
 
     template CommonQualifiers(alias F, T...)
     {
@@ -261,24 +248,11 @@ private
 void main()
 {
     import std.stdio;
-    static immutable int[2] a = [1, 4];
-    static immutable int[4] b = [5, 1, 2, 3];
-    static immutable real[3] c = [1.2, 3.4, 5.6];
-    auto d = maxByElem(a, b, c);
-    pragma(msg, d);
     import std.array : array;
-    
-    import std.algorithm : min;
-    static immutable real[2] wut = dive!(min, false)(a, b, c).array;
-    pragma(msg, wut);
-    /*
-    immutable real[2] wat = wut.array;
-    
-    pragma(msg, wat);
-    //pragma(msg, wut);
-    import std.array : join;
-    //real[2] wat = mixin("[" ~ demux(0, typeof(wut).length, "wut").join(", ") ~ "]");
-    import std.traits;
-    pragma(msg, CommonArrayType!(typeof(a), typeof(b), typeof(c)));
-    */
+    immutable int[3] a = [1, 4, 5];
+    immutable real[3] b = [1.2, 3.4, 5.6];
+    immutable auto d = reflect(a, b);
+    pragma(msg, d);
+    pragma(msg, typeof(d));
+    writeln(d);
 }
