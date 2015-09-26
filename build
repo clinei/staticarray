@@ -1,3 +1,0 @@
-#!/bin/sh
-dub build -b release --compiler=ldc2
-strip --strip-unneeded test
