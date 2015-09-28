@@ -195,13 +195,18 @@ pure nothrow @nogc
     }
     */
     
-    auto dot(A, B)(A a, B b)// if (allSatisfy!(isStaticArray, A, B))
+    import std.range : isInputRange;
+    auto dot(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B))
     {
-        import std.algorithm : map, reduce, sum;
+        import std.algorithm : map, sum;
         import std.range : zip;
         alias ResType = CommonElementType!(A, B);
-        ResType res = zip(a[], b[]).map!(c => c[0] * c[1]).sum;
+        ResType res = zip(a, b).map!(c => c[0] * c[1]).sum;
         return res;
+    }
+    auto dot(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B))
+    {
+        return dot(a[], b[]);
     }
     
     auto cross(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3 && hasCommonArrayType!(A, B))
@@ -211,13 +216,18 @@ pure nothrow @nogc
                                       a[0] * b[1] - a[1] * b[0]];
         return res;
     }
-    auto reflect(A, B)(A a, B b)// if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
+    
+    auto reflect(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B))
     {
         import std.algorithm : map;
         import std.range : zip;
-        auto d = dot(a[], b[]);
-        auto res = zip(a[], b[]).map!(c => c[0] - 2 * c[1] * d);
+        auto d = dot(a, b);
+        auto res = zip(a, b).map!(c => c[0] - 2 * c[1] * d);
         return res;
+    }
+    auto reflect(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
+    {
+        return reflect(a[], b[]);
     }
 }
 
@@ -259,10 +269,12 @@ void main()
 {
     import std.stdio;
     import std.array : array;
-    static immutable int[3] a = [1, 4, 5];
-    static immutable real[3] b = [1.2, 3.4, 5.6];
-    immutable auto d = reflect(a[], b[]);
-    pragma(msg, d);
-    pragma(msg, typeof(d));
-    writeln(d.array);
+    immutable int[3] a = [1, 4, 5];
+    immutable real[3] b = [1.2, 3.4, 5.6];
+    auto d = reflect(a, b).array;
+    writeln(d);
+    import std.algorithm : map, reduce;
+    import std.range : zip;
+    auto e = dot(a, b);
+    writeln(zip(a[], b[]).map!(c => c[0] - 2 * c[1] * e));
 }
