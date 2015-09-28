@@ -204,10 +204,6 @@ pure nothrow @nogc
         ResType res = zip(a, b).map!(c => c[0] * c[1]).sum;
         return res;
     }
-    auto dot(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B))
-    {
-        return dot(a[], b[]);
-    }
     
     auto cross(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3 && hasCommonArrayType!(A, B))
     {
@@ -224,10 +220,6 @@ pure nothrow @nogc
         auto d = dot(a, b);
         auto res = zip(a, b).map!(c => c[0] - 2 * c[1] * d);
         return res;
-    }
-    auto reflect(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
-    {
-        return reflect(a[], b[]);
     }
 }
 
@@ -271,10 +263,7 @@ void main()
     import std.array : array;
     immutable int[3] a = [1, 4, 5];
     immutable real[3] b = [1.2, 3.4, 5.6];
-    auto d = reflect(a, b).array;
+    immutable auto d = reflect(a[], b[]).array;
+    // TODO: Make `d` readable during compile time
     writeln(d);
-    import std.algorithm : map, reduce;
-    import std.range : zip;
-    auto e = dot(a, b);
-    writeln(zip(a[], b[]).map!(c => c[0] - 2 * c[1] * e));
 }
