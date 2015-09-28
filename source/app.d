@@ -177,7 +177,7 @@ pure nothrow @nogc
         import std.algorithm : max;
         return arrays.dive!(max);
     }
-    
+    /*
     auto dot(Arrays...)(Arrays arrays) if (allSatisfy!(isStaticArray, Arrays))
     {
         import std.algorithm : reduce;
@@ -187,9 +187,20 @@ pure nothrow @nogc
         
         alias ElemType = Unqual!(CommonElementType!Arrays);
         ElemType res = 0;
+        
         import std.format : format;
         // CTFE `zip`
         mixin(loopMix!(0, Shortest!Arrays.length, "res += %s;".format(demux(0, Arrays.length, "arrays", "[@]").join(" * "))).join("\n"));
+        return res;
+    }
+    */
+    
+    auto dot(A, B)(A a, B b)// if (allSatisfy!(isStaticArray, A, B))
+    {
+        import std.algorithm : map, reduce, sum;
+        import std.range : zip;
+        alias ResType = CommonElementType!(A, B);
+        ResType res = zip(a[], b[]).map!(c => c[0] * c[1]).sum;
         return res;
     }
     
@@ -200,13 +211,12 @@ pure nothrow @nogc
                                       a[0] * b[1] - a[1] * b[0]];
         return res;
     }
-    auto reflect(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
-    body
+    auto reflect(A, B)(A a, B b)// if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3)
     {
         import std.algorithm : map;
         import std.range : zip;
-        auto d = dot(a, b);
-        auto res = zip(a[], b[]).map!((a2, b2) => a2 - 2 * b2 * d);
+        auto d = dot(a[], b[]);
+        auto res = zip(a[], b[]).map!(c => c[0] - 2 * c[1] * d);
         return res;
     }
 }
@@ -249,10 +259,10 @@ void main()
 {
     import std.stdio;
     import std.array : array;
-    immutable int[3] a = [1, 4, 5];
-    immutable real[3] b = [1.2, 3.4, 5.6];
-    immutable auto d = reflect(a, b);
+    static immutable int[3] a = [1, 4, 5];
+    static immutable real[3] b = [1.2, 3.4, 5.6];
+    immutable auto d = reflect(a[], b[]);
     pragma(msg, d);
     pragma(msg, typeof(d));
-    writeln(d);
+    writeln(d.array);
 }
