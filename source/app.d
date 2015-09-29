@@ -224,9 +224,7 @@ pure nothrow @nogc
     {
         import std.algorithm : map, sum;
         import std.range : zip;
-        alias ResType = CommonElementType!(A, B);
-        ResType res = zip(a, b).map!(c => c[0] * c[1]).sum;
-        return res;
+        return zip(a, b).map!(c => c[0] * c[1]).sum;
     }
     
     import std.range : isRandomAccessRange;
@@ -265,16 +263,13 @@ pure nothrow @nogc
         import std.algorithm : map, sum;
         alias ResType = ElementType!V;
         return v.map!(a => a * a).sum(Zero!ResType);
-        //return reduce!((a, b) => a + b)(Zero!ResType, v.map!(a => a * a));
     }
     
     auto squaredDistanceTo(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B) && hasCommonElementType!(A, B))
     {
         import std.algorithm : map;
         import std.range : zip;
-        alias ResType = CommonElementType!(A, B);
-        auto res = zip(a, b).map!(c => c[1] - c[0]).squaredLength;
-        return res;
+        return zip(a, b).map!(c => c[1] - c[0]).squaredLength;
     }
     
     auto inverseLength(bool fast = false, FloatingType = real, V)(V v) @property if (isInputRange!V)
@@ -352,9 +347,9 @@ void main()
     import std.stdio;
     import std.array : array;
     
-    immutable int[3] a = [1, 4, 5];
-    immutable real[3] b = [1.2, 3.4, 5.6];
-    immutable auto d = a[].reflect(b[]);
+    static immutable int[3] a = [1, 4, 5];
+    static immutable real[3] b = [1.2, 3.4, 5.6];
+    immutable auto d = a[].reflect(b[]).array;
     pragma(msg, d);
     writeln(d);
 }
