@@ -151,31 +151,55 @@ static string[] loopMix(size_t begin = 0, size_t end = 1, string form)()
     }
     return lines;
 }
-
+/*
 auto dive(alias fun, Arrays...)(Arrays arrays) pure nothrow @nogc
 {
     import std.algorithm : reduce, map;
     import std.range : zip;
     auto ans = mixin("zip(" ~ atorMix!("arrays", Arrays) ~ ")").map!(reduce!fun);
     
-    alias ResType = CommonElementType!Arrays[Shortest!Arrays.length];
-    
     return ans;
 }
+*/
 pure nothrow @nogc
 {
-    auto minByElem(Arrays...)(Arrays arrays)
-        if (allSatisfy!(isStaticArray, Arrays) && hasCommonElementType!Arrays)
+    auto dive(alias fun, alias init, Ranges...)(Ranges ranges)
     {
-        import std.algorithm : min;
-        return arrays.dive!(min);
+        import std.algorithm : reduce, map;
+        import std.array : join;
+        import std.range : zip;
+        alias ElemType = CommonElementType!Ranges;
+        return ranges.zip.map!(a => reduce!fun(init, a));
     }
 
-    auto maxByElem(Arrays...)(Arrays arrays)
-        if (allSatisfy!(isStaticArray, Arrays) && hasCommonElementType!Arrays)
+    auto minByElem(Ranges...)(Ranges ranges)
+        if (allSatisfy!(isInputRange, Ranges) && hasCommonElementType!Ranges)
     {
+        alias ElemType = CommonElementType!Ranges;
+        import std.algorithm : min;
+        return ranges.dive!(min, Max!ElemType);
+    }
+
+    enum Max(T) = T.max;
+    
+    template Zero(T)
+    {
+        static if (isFloatingPoint!T)
+        {
+            enum Zero = T.min_normal;
+        }
+        else
+        {
+            enum Zero = T.init;
+        }
+    }
+    
+    auto maxByElem(Ranges...)(Ranges ranges)
+        if (allSatisfy!(isInputRange, Ranges) && hasCommonElementType!Ranges)
+    {
+        alias ElemType = CommonElementType!Ranges;
         import std.algorithm : max;
-        return arrays.dive!(max);
+        return ranges.dive!(max, Zero!ElemType);
     }
     /*
     auto dot(Arrays...)(Arrays arrays) if (allSatisfy!(isStaticArray, Arrays))
@@ -205,11 +229,13 @@ pure nothrow @nogc
         return res;
     }
     
-    auto cross(A, B)(A a, B b) if (allSatisfy!(isStaticArray, A, B) && A.length == 3 && B.length == 3 && hasCommonArrayType!(A, B))
+    import std.range : isRandomAccessRange;
+    auto cross(A, B)(A a, B b) if (allSatisfy!(isRandomAccessRange, A, B) && hasCommonElementType!(A, B))
     {
-        CommonArrayType!(A, B) res = [a[1] * b[2] - a[2] * b[1],
-                                      a[2] * b[0] - a[0] * b[2],
-                                      a[0] * b[1] - a[1] * b[0]];
+        alias ResType = CommonElementType!(A, B)[3];
+        ResType res = [a[1] * b[2] - a[2] * b[1],
+                       a[2] * b[0] - a[0] * b[2],
+                       a[0] * b[1] - a[1] * b[0]];
         return res;
     }
     
@@ -218,8 +244,72 @@ pure nothrow @nogc
         import std.algorithm : map;
         import std.range : zip;
         auto d = dot(a, b);
-        auto res = zip(a, b).map!(c => c[0] - 2 * c[1] * d);
+        return zip(a, b).map!(c => c[0] - 2 * c[1] * d);
+    }
+    
+    auto floatingLength(FloatingType = real, V)(V v) @property if (isInputRange!V)
+    {
+        import std.math : sqrt;
+        return sqrt(cast(FloatingType)v.squaredLength);
+    }
+    
+    auto distanceTo(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B))
+    {
+        alias ElemType = CommonElementType!(A, B);
+        return dive!("b - a", Zero!ElemType)(a, b).floatingLength;
+    }
+    
+    auto squaredLength(V)(V v) if (isInputRange!V)
+    {
+        
+        import std.algorithm : map, sum;
+        alias ResType = ElementType!V;
+        return v.map!(a => a * a).sum(Zero!ResType);
+        //return reduce!((a, b) => a + b)(Zero!ResType, v.map!(a => a * a));
+    }
+    
+    auto squaredDistanceTo(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B) && hasCommonElementType!(A, B))
+    {
+        import std.algorithm : map;
+        import std.range : zip;
+        alias ResType = CommonElementType!(A, B);
+        auto res = zip(a, b).map!(c => c[1] - c[0]).squaredLength;
         return res;
+    }
+    
+    auto inverseLength(bool fast = false, FloatingType = real, V)(V v) @property if (isInputRange!V)
+    {
+        static if (fast)
+        {
+            return inverseSqrt(cast(FloatingType)v.squaredLength);
+        }
+        else
+        {
+            return cast(FloatingType)(1) / v.floatingLength;
+        }
+    }
+    
+    /// SSE approximation of reciprocal square root.
+    T inverseSqrt(T)(T x) if (isFloatingPoint!T)
+    {
+        import std.math : sqrt;
+        version(AsmX86)
+        {
+            static if (is(T == float))
+            {
+                float result;
+
+                static if( __VERSION__ >= 2067 )
+                    mixin(`asm pure nothrow @nogc { movss XMM0, x; rsqrtss XMM0, XMM0; movss result, XMM0; }`);
+                else
+                    mixin(`asm { movss XMM0, x; rsqrtss XMM0, XMM0; movss result, XMM0; }`);
+                return result;
+            }
+            else
+                return 1 / sqrt(x);
+        }
+        else
+            return 1 / sqrt(x);
     }
 }
 
@@ -261,9 +351,10 @@ void main()
 {
     import std.stdio;
     import std.array : array;
+    
     immutable int[3] a = [1, 4, 5];
     immutable real[3] b = [1.2, 3.4, 5.6];
-    immutable auto d = reflect(a[], b[]).array;
-    // TODO: Make `d` readable during compile time
+    immutable auto d = a[].reflect(b[]);
+    pragma(msg, d);
     writeln(d);
 }
