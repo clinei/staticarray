@@ -123,44 +123,6 @@ enum bool hasCommonArrayType(T...) = isVoid!(CommonArrayType!T);
 
 enum bool hasSameLength(T...) = is(Shortest!T == Longest!T);
 
-static string[] demux(size_t begin = 0, size_t end = 1, string before = "", string after = "") pure
-{
-    string[] elems;
-    foreach (i; begin..end)
-    {
-        import std.format : format;
-        elems ~= "%s[%s]%s".format(before, i, after);
-    }
-    return elems;
-}
-
-static string atorMix(string target = "arrays", Arrays...)() pure @property
-{
-    import std.array : join;
-    return demux(0, Arrays.length, target, "[]").join(", ");
-}
-
-static string[] loopMix(size_t begin = 0, size_t end = 1, string form)()
-{
-    string[] lines;
-    foreach (i; begin..end)
-    {
-        import std.array : replace;
-        import std.conv : to;
-        lines ~= form.replace("@", i.to!string);
-    }
-    return lines;
-}
-/*
-auto dive(alias fun, Arrays...)(Arrays arrays) pure nothrow @nogc
-{
-    import std.algorithm : reduce, map;
-    import std.range : zip;
-    auto ans = mixin("zip(" ~ atorMix!("arrays", Arrays) ~ ")").map!(reduce!fun);
-    
-    return ans;
-}
-*/
 pure nothrow @nogc
 {
     auto dive(alias fun, alias init, Ranges...)(Ranges ranges)
@@ -170,14 +132,6 @@ pure nothrow @nogc
         import std.range : zip;
         alias ElemType = CommonElementType!Ranges;
         return ranges.zip.map!(a => reduce!fun(init, a));
-    }
-
-    auto minByElem(Ranges...)(Ranges ranges)
-        if (allSatisfy!(isInputRange, Ranges) && hasCommonElementType!Ranges)
-    {
-        alias ElemType = CommonElementType!Ranges;
-        import std.algorithm : min;
-        return ranges.dive!(min, Max!ElemType);
     }
 
     enum Max(T) = T.max;
@@ -194,6 +148,14 @@ pure nothrow @nogc
         }
     }
     
+    auto minByElem(Ranges...)(Ranges ranges)
+        if (allSatisfy!(isInputRange, Ranges) && hasCommonElementType!Ranges)
+    {
+        alias ElemType = CommonElementType!Ranges;
+        import std.algorithm : min;
+        return ranges.dive!(min, Max!ElemType);
+    }
+    
     auto maxByElem(Ranges...)(Ranges ranges)
         if (allSatisfy!(isInputRange, Ranges) && hasCommonElementType!Ranges)
     {
@@ -201,23 +163,6 @@ pure nothrow @nogc
         import std.algorithm : max;
         return ranges.dive!(max, Zero!ElemType);
     }
-    /*
-    auto dot(Arrays...)(Arrays arrays) if (allSatisfy!(isStaticArray, Arrays))
-    {
-        import std.algorithm : reduce;
-        import std.range : zip;
-        import std.conv : to;
-        import std.array : join;
-        
-        alias ElemType = Unqual!(CommonElementType!Arrays);
-        ElemType res = 0;
-        
-        import std.format : format;
-        // CTFE `zip`
-        mixin(loopMix!(0, Shortest!Arrays.length, "res += %s;".format(demux(0, Arrays.length, "arrays", "[@]").join(" * "))).join("\n"));
-        return res;
-    }
-    */
     
     import std.range : isInputRange;
     auto dot(A, B)(A a, B b) if (allSatisfy!(isInputRange, A, B))
